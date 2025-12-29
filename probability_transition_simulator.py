@@ -9,29 +9,77 @@ fail (stay), or downgrade (level down).
 
 import random
 from typing import List, Tuple, Dict
-from dataclasses import dataclass
+from collections import defaultdict
 
 
-@dataclass
 class TransitionStats:
-    """Stores statistics about transitions during simulations."""
-    success_count: int = 0
-    break_count: int = 0
-    fail_count: int = 0
-    downgrade_count: int = 0
-    total_steps: int = 0
+    """Stores statistics about transitions during simulations, tracked by level."""
 
-    def add_transition(self, transition_type: str):
-        """Record a transition."""
+    def __init__(self):
+        # Track counts by level for each transition type
+        self.success_by_level: Dict[int, int] = defaultdict(int)
+        self.break_by_level: Dict[int, int] = defaultdict(int)
+        self.fail_by_level: Dict[int, int] = defaultdict(int)
+        self.downgrade_by_level: Dict[int, int] = defaultdict(int)
+        self.total_steps: int = 0
+
+    def add_transition(self, transition_type: str, from_level: int):
+        """Record a transition from a specific level."""
         if transition_type == 'success':
-            self.success_count += 1
+            self.success_by_level[from_level] += 1
         elif transition_type == 'break':
-            self.break_count += 1
+            self.break_by_level[from_level] += 1
         elif transition_type == 'fail':
-            self.fail_count += 1
+            self.fail_by_level[from_level] += 1
         elif transition_type == 'downgrade':
-            self.downgrade_count += 1
+            self.downgrade_by_level[from_level] += 1
         self.total_steps += 1
+
+    @property
+    def success_count(self) -> int:
+        """Total success transitions across all levels."""
+        return sum(self.success_by_level.values())
+
+    @property
+    def break_count(self) -> int:
+        """Total break transitions across all levels."""
+        return sum(self.break_by_level.values())
+
+    @property
+    def fail_count(self) -> int:
+        """Total fail transitions across all levels."""
+        return sum(self.fail_by_level.values())
+
+    @property
+    def downgrade_count(self) -> int:
+        """Total downgrade transitions across all levels."""
+        return sum(self.downgrade_by_level.values())
+
+    def get_level_stats(self, level: int) -> Dict[str, int]:
+        """Get transition counts for a specific level.
+
+        Parameters:
+        -----------
+        level : int
+            The level to get statistics for
+
+        Returns:
+        --------
+        Dict[str, int]
+            Dictionary with keys 'success', 'break', 'fail', 'downgrade', 'total'
+        """
+        success = self.success_by_level.get(level, 0)
+        break_ = self.break_by_level.get(level, 0)
+        fail = self.fail_by_level.get(level, 0)
+        downgrade = self.downgrade_by_level.get(level, 0)
+
+        return {
+            'success': success,
+            'break': break_,
+            'fail': fail,
+            'downgrade': downgrade,
+            'total': success + break_ + fail + downgrade
+        }
 
     def __str__(self):
         return (f"Total Steps: {self.total_steps}\n"
@@ -140,7 +188,7 @@ def simulate_transitions(
 
             # Record transition
             simulation_history.append((old_level, current_level, transition))
-            overall_stats.add_transition(transition)
+            overall_stats.add_transition(transition, old_level)
             steps += 1
 
             if verbose:
@@ -161,7 +209,7 @@ def simulate_transitions(
     return overall_stats, all_histories
 
 
-def print_summary(stats: TransitionStats, num_simulations: int):
+def print_summary(stats: TransitionStats, num_simulations: int, show_by_level: bool = True):
     """Print summary statistics."""
     print("\n" + "=" * 50)
     print("SIMULATION SUMMARY")
@@ -171,11 +219,38 @@ def print_summary(stats: TransitionStats, num_simulations: int):
     print(f"\nAverage steps per simulation: {stats.total_steps / num_simulations:.2f}")
 
     if stats.total_steps > 0:
-        print("\nTransition Percentages:")
+        print("\nOverall Transition Percentages:")
         print(f"  Success: {100 * stats.success_count / stats.total_steps:.2f}%")
         print(f"  Break: {100 * stats.break_count / stats.total_steps:.2f}%")
         print(f"  Fail: {100 * stats.fail_count / stats.total_steps:.2f}%")
         print(f"  Downgrade: {100 * stats.downgrade_count / stats.total_steps:.2f}%")
+
+    if show_by_level:
+        # Get all levels that had any transitions
+        all_levels = set()
+        all_levels.update(stats.success_by_level.keys())
+        all_levels.update(stats.break_by_level.keys())
+        all_levels.update(stats.fail_by_level.keys())
+        all_levels.update(stats.downgrade_by_level.keys())
+
+        if all_levels:
+            print("\n" + "=" * 50)
+            print("TRANSITIONS BY LEVEL")
+            print("=" * 50)
+
+            for level in sorted(all_levels):
+                success = stats.success_by_level.get(level, 0)
+                break_ = stats.break_by_level.get(level, 0)
+                fail = stats.fail_by_level.get(level, 0)
+                downgrade = stats.downgrade_by_level.get(level, 0)
+                level_total = success + break_ + fail + downgrade
+
+                if level_total > 0:
+                    print(f"\nLevel {level} ({level_total} transitions):")
+                    print(f"  Success: {success:4d} ({100 * success / level_total:5.1f}%)")
+                    print(f"  Break:   {break_:4d} ({100 * break_ / level_total:5.1f}%)")
+                    print(f"  Fail:    {fail:4d} ({100 * fail / level_total:5.1f}%)")
+                    print(f"  Downgrade: {downgrade:4d} ({100 * downgrade / level_total:5.1f}%)")
 
 
 def example_usage():
